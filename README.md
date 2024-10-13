@@ -94,6 +94,29 @@ And I am registering an event on every update of the actors table with the callb
 That is the main notification part of the script. The other part is the conversion of the values of the row. The values are in bytea format, so we need to convert them to Python types. The conversion is done with the following function:
 
 ```python
+def convert_value(oid, value):
+    if value is None:
+        return None
+    python_type = OID_MAP.get(oid, str)
+    try:
+        if python_type == bool:
+            return value == 't'
+        elif python_type == datetime:
+            return datetime.strptime(value, '%Y-%m-%d %H:%M:%S')
+        elif python_type == date:
+            return datetime.strptime(value, '%Y-%m-%d').date()
+        elif python_type == dict:
+            import json
+            return json.loads(value)
+        elif python_type == uuid.UUID:
+            return uuid.UUID(value)
+        else:
+            return python_type(value)
+    except Exception as e:
+        logger.error(f"Error converting {value} with OID {oid}: {e}")
+        return value
+
+
 def get_event(message_type, rel, tx, payload) -> Event | None:
     current_type = Types(message_type)
     decoder_map = {
