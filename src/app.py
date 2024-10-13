@@ -1,4 +1,5 @@
 import logging
+from datetime import datetime
 
 from lib.consumer import Consumer
 from lib.models import Types, Event
@@ -12,12 +13,14 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-def callback(event: Event):
-    logger.info(f"[{event.type}] {event.schema_name}.{event.table_name} with values {event.values}")
+def callback(ts: datetime, event: Event):
+    logger.info(
+        f"{ts} id:{event.tx_id} [{event.type}] {event.schema_name}.{event.table_name} with values {event.values}")
 
 
 consumer = Consumer(DSN)
-consumer.on(Types.UPDATE, 'public.actors', callback)
+consumer.on(Types.UPDATE, 'public.*', callback)
+
 consumer.start(
     slot_name=SLOT_NAME,
     publication_name=PUBLICATION_NAME)

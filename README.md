@@ -41,6 +41,7 @@ The main script is like this:
 
 ```python
 import logging
+from datetime import datetime
 
 from lib.consumer import Consumer
 from lib.models import Types, Event
@@ -54,12 +55,14 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-def callback(event: Event):
-    logger.info(f"[{event.type}] {event.schema_name}.{event.table_name} with values {event.values}")
+def callback(ts: datetime, event: Event):
+    logger.info(
+        f"{ts} id:{event.tx_id} [{event.type}] {event.schema_name}.{event.table_name} with values {event.values}")
 
 
 consumer = Consumer(DSN)
-consumer.on(Types.UPDATE, 'public.actors', callback)
+consumer.on(Types.UPDATE, 'public.*', callback)
+
 consumer.start(
     slot_name=SLOT_NAME,
     publication_name=PUBLICATION_NAME)
@@ -114,7 +117,7 @@ def convert_value(oid, value):
         return value
 
 
-def notify_event(message_type, rel, payload, callback):
+def get_event(message_type, rel, tx, payload) -> Event | None:
     current_type = Types(message_type)
     decoder_map = {
         Types.INSERT: decoders.Insert,
@@ -125,22 +128,41 @@ def notify_event(message_type, rel, payload, callback):
     data = decoder_map.get(current_type, lambda x: None)(payload)
 
     if data:
-        fields = [
-            Field(
-                name=c.name,
-                value=convert_value(c.type_id, data.new_tuple.column_data[i].col_data),
-                pkey=c.part_of_pkey == 1
-            )
-            for i, c in enumerate(rel.columns)
-        ]
+        if current_type == Types.DELETE:
+            fields = get_fields(data, rel, data.old_tuple)
+        elif current_type == Types.TRUNCATE:
+            fields = []
+        else:
+            fields = get_fields(data, rel, data.new_tuple)
 
         event = Event(
             type=current_type,
+            tx_id=tx.tx_id,
             schema_name=rel.namespace,
             table_name=rel.relation_name,
             values=fields
         )
-        callback(event)
+        return event
+    return None
+```
+When a client is connected we can see it using a simple query:
+
+```sql
+SELECT * FROM pg_stat_replication;
+```
+
+And also we can see the replication slots with the following query:
+
+```sql
+SELECT
+    pg_current_wal_lsn() AS current_lsn,
+    slot_name,
+    restart_lsn,
+    confirmed_flush_lsn
+FROM
+    pg_replication_slots
+WHERE
+    slot_type = 'logical';
 ```
 
 The script is just an experiment. Maybe it can be adapted to a real application, but probably it needs more work, especially in data type conversion.

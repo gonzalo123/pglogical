@@ -39,6 +39,7 @@ class Field(BaseModel):
 
 class Event(BaseModel):
     type: Types
+    tx_id: int
     schema_name: str
     table_name: str
     values: List[Field]
