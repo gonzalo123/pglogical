@@ -94,29 +94,6 @@ And I am registering an event on every update of the actors table with the callb
 That is the main notification part of the script. The other part is the conversion of the values of the row. The values are in bytea format, so we need to convert them to Python types. The conversion is done with the following function:
 
 ```python
-def convert_value(oid, value):
-    if value is None:
-        return None
-    python_type = OID_MAP.get(oid, str)
-    try:
-        if python_type == bool:
-            return value == 't'
-        elif python_type == datetime:
-            return datetime.strptime(value, '%Y-%m-%d %H:%M:%S')
-        elif python_type == date:
-            return datetime.strptime(value, '%Y-%m-%d').date()
-        elif python_type == dict:
-            import json
-            return json.loads(value)
-        elif python_type == uuid.UUID:
-            return uuid.UUID(value)
-        else:
-            return python_type(value)
-    except Exception as e:
-        logger.error(f"Error converting {value} with OID {oid}: {e}")
-        return value
-
-
 def get_event(message_type, rel, tx, payload) -> Event | None:
     current_type = Types(message_type)
     decoder_map = {
@@ -128,12 +105,10 @@ def get_event(message_type, rel, tx, payload) -> Event | None:
     data = decoder_map.get(current_type, lambda x: None)(payload)
 
     if data:
-        if current_type == Types.DELETE:
-            fields = get_fields(data, rel, data.old_tuple)
-        elif current_type == Types.TRUNCATE:
+        if current_type == Types.TRUNCATE:
             fields = []
         else:
-            fields = get_fields(data, rel, data.new_tuple)
+            fields = get_fields(rel, getattr(data, 'old_tuple', None), getattr(data, 'new_tuple', None))
 
         event = Event(
             type=current_type,
@@ -144,6 +119,19 @@ def get_event(message_type, rel, tx, payload) -> Event | None:
         )
         return event
     return None
+
+
+def get_fields(rel, old, new):
+    fields = [
+        Field(
+            name=c.name,
+            old=convert_value(c.type_id, old.column_data[i].col_data) if old else None,
+            new=convert_value(c.type_id, new.column_data[i].col_data) if new else None,
+            pkey=c.part_of_pkey == 1
+        )
+        for i, c in enumerate(rel.columns)
+    ]
+    return fields
 ```
 
 When a client is connected we can see it using a simple query:

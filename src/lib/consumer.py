@@ -45,12 +45,10 @@ def get_event(message_type, rel, tx, payload) -> Event | None:
     data = decoder_map.get(current_type, lambda x: None)(payload)
 
     if data:
-        if current_type == Types.DELETE:
-            fields = get_fields(data, rel, data.old_tuple)
-        elif current_type == Types.TRUNCATE:
+        if current_type == Types.TRUNCATE:
             fields = []
         else:
-            fields = get_fields(data, rel, data.new_tuple)
+            fields = get_fields(rel, getattr(data, 'old_tuple', None), getattr(data, 'new_tuple', None))
 
         event = Event(
             type=current_type,
@@ -63,11 +61,12 @@ def get_event(message_type, rel, tx, payload) -> Event | None:
     return None
 
 
-def get_fields(data, rel, tuple_data):
+def get_fields(rel, old, new):
     fields = [
         Field(
             name=c.name,
-            value=convert_value(c.type_id, tuple_data.column_data[i].col_data),
+            old=convert_value(c.type_id, old.column_data[i].col_data) if old else None,
+            new=convert_value(c.type_id, new.column_data[i].col_data) if new else None,
             pkey=c.part_of_pkey == 1
         )
         for i, c in enumerate(rel.columns)
@@ -127,8 +126,8 @@ class Consumer:
                 if event:
                     self.events_to_notify.append((domain_event.callback, event))
 
-    def emit_events(self, commit_msg):
-        ts = commit_msg.commit_ts
+    def emit_events(self):
+        ts = self.tx.commit_ts
         for callback, event in self.events_to_notify:
             event.tx_id = self.tx.tx_id
             callback(ts, event)
@@ -141,18 +140,18 @@ class Consumer:
             if message_type == "R":
                 self.rel = decoders.Relation(payload)
             elif message_type == "B":
-                self.events_to_notify = []
                 begin_msg = decoders.Begin(payload)
                 self.tx = Transaction(
                     tx_id=begin_msg.tx_xid,
                     begin_lsn=begin_msg.lsn,
                     commit_ts=begin_msg.commit_ts)
             elif message_type == "C":
-                commit_msg = decoders.Commit(payload)
-                self.emit_events(commit_msg)
+                self.emit_events()
+                msg.cursor.send_feedback(flush_lsn=msg.data_start)
+                self.tx = None
+                self.rel = None
+                self.events_to_notify = []
             else:
                 self.append_event_if_registered(message_type, payload)
-
-            msg.cursor.send_feedback(flush_lsn=msg.data_start)
 
         return consume

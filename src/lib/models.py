@@ -21,21 +21,26 @@ OID_MAP = {
     2950: uuid.UUID,
 }
 
+
 class Types(str, Enum):
     INSERT = "I",
     UPDATE = "U",
     DELETE = "D"
     TRUNCATE = "T",
 
+
 class Transaction(BaseModel):
     tx_id: int
     begin_lsn: int
     commit_ts: datetime
 
+
 class Field(BaseModel):
     name: str
-    value: str|float|int|bool|datetime|None
+    old: str | float | int | bool | datetime | None
+    new: str | float | int | bool | datetime | None
     pkey: bool
+
 
 class Event(BaseModel):
     type: Types
@@ -43,6 +48,7 @@ class Event(BaseModel):
     schema_name: str
     table_name: str
     values: List[Field]
+
 
 class DomainEvent(BaseModel):
     type: Types
