@@ -35,7 +35,7 @@ def consume(msg):
 cur.consume_stream(consume)
 ```
 
-With this simple script, we're listening to all changes in our database. We can use this script to generate domain events in our application. We need to decode the payload to get the changes in our tables. There is a library to decode the payload called pypgoutput. I have had problems with this library, so I have used only one part of the library to decode the payload (decoders.py).
+With this simple script, we're listening to all changes in our database. We can use this script to generate domain events in our application. We need to decode the payload to get the changes in our tables. There is a library to decode the payload called [pypgoutput](https://pypi.org/project/pypgoutput/). I have had problems with this library, so I have used only one part of the library to decode the payload (decoders.py).
 
 The main script is like this:
 
@@ -145,6 +145,7 @@ def get_event(message_type, rel, tx, payload) -> Event | None:
         return event
     return None
 ```
+
 When a client is connected we can see it using a simple query:
 
 ```sql
