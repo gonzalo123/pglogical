@@ -1,5 +1,4 @@
 import logging
-from datetime import datetime
 
 from lib.consumer import Consumer
 from lib.models import Types, Event
@@ -13,9 +12,10 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-def callback(ts: datetime, event: Event):
+def callback(event: Event):
     logger.info(
-        f"{ts} id:{event.tx_id} [{event.type}] {event.schema_name}.{event.table_name} with values {event.values}")
+        f"{event.ts} id:{event.tx_id} [{event.type}] "
+        f"{event.schema_name}.{event.table_name} with values {event.values}")
 
 
 consumer = Consumer(DSN)

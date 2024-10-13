@@ -53,6 +53,7 @@ def get_event(message_type, rel, tx, payload) -> Event | None:
         event = Event(
             type=current_type,
             tx_id=tx.tx_id,
+            ts=tx.commit_ts,
             schema_name=rel.namespace,
             table_name=rel.relation_name,
             values=fields
@@ -127,10 +128,8 @@ class Consumer:
                     self.events_to_notify.append((domain_event.callback, event))
 
     def emit_events(self):
-        ts = self.tx.commit_ts
         for callback, event in self.events_to_notify:
-            event.tx_id = self.tx.tx_id
-            callback(ts, event)
+            callback(event)
 
     def get_consumer(self):
         def consume(msg):
